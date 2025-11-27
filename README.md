@@ -50,8 +50,6 @@ Datasets and parameter settings can be found in manuscript supplement.
 ### Evaluation Scripts
 The notebooks in  `src/metrics_scripts`. `...` needs to be run first to get ... and `...` processes all metrics. 
 
-#### All in one
-Processing each dataset with each method can be done before evaluation. The evaluation will then run on all outputs together.
 
 ## Adding your own method
 To officially add your own method, please open an issue and provide us with the following to reproduce your method. 
