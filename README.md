@@ -11,13 +11,35 @@ We present "spCellEval", a quantitative comparison of automated/semi-automated c
 
 In order to reproduce the results, the raw datasets currently need to be downloaded from public repositories. Please refer to the public registered Stage 1 manuscript on [figshare]()
 
-Data workflow pipeline:
 
-Raw data --> preprocessing --> run method --> predictions_{fold_id}.csv --> evaluation
+
+```
+Raw Dataset 
+  │
+  ▼
+Preprocessing
+  │
+  ├───────────────────────┬───────────────────────┐
+  ▼                       ▼                       ▼
+Method 1                Method 2              Method n
+  │                       │                       │
+  ▼                       ▼                       ▼
+pred_fold_{1-5}.csv   pred_fold_{1-5}.csv   pred_fold_{1-5}.csv
+  │                       │                       │
+  └───────────────────────┼───────────────────────┘
+                          ▼
+                  Evaluation Scripts
+                          │
+                          ▼
+                        Results
+
+```
 
 ### Preprocessing
 
 Preprocessing of each dataset can be found in `src/preprocessing/datasets/<process_dataset.ipynb>`
+
+For some datasets, multistack tiffs or channel_names have to be created. Please refer to `src/preprocessing/`
 
 ### Running methods
 
@@ -26,7 +48,10 @@ Scripts to run each method are provided in `src/<method>`.
 Datasets and parameter settings can be found in manuscript supplement.
 
 ### Evaluation Scripts
-The notebooks in  `src/metrics_scripts` can be used to get the complete metrics on all methods for each dataset. 
+The notebooks in  `src/metrics_scripts`. `...` needs to be run first to get ... and `...` processes all metrics. 
+
+#### All in one
+Processing each dataset with each method can be done before evaluation. The evaluation will then run on all outputs together.
 
 ## Adding your own method
 To officially add your own method, please open an issue and provide us with the following to reproduce your method. 
