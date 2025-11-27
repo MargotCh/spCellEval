@@ -9,18 +9,30 @@ We present "spCellEval", a quantitative comparison of automated/semi-automated c
 
 ## Getting Started
 
-Scripts to run each method are provided within `src/<method>`.
+In order to reproduce the results, the raw datasets currently need to be downloaded from public repositories. Please refer to the public registered Stage 1 manuscript on [figshare]()
 
-Datasets and parameter settings will be uploaded to a public repository soon!
+Data workflow pipeline:
+
+Raw data --> preprocessing --> run method --> predictions_{fold_id}.csv --> evaluation
+
+### Preprocessing
+
+Preprocessing of each dataset can be found in `src/preprocessing/datasets/<process_dataset.ipynb>`
+
+### Running methods
+
+Scripts to run each method are provided in `src/<method>`.
+
+Datasets and parameter settings can be found in manuscript supplement.
 
 ### Evaluation Scripts
 The notebooks in  `src/metrics_scripts` can be used to get the complete metrics on all methods for each dataset. 
 
-### Adding your own method
+## Adding your own method
 To officially add your own method, please open an issue and provide us with the following to reproduce your method. 
 1. GitHub repo for the method
 2. List of Parameters used (if any)
-3. Your predictions (optional: would make things faster for us)
+3. OPTIONAL: Your predictions (this speeds up the evaluation process)
 
 Folder Structure to add your predictions in 
 ```
