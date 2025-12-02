@@ -9,7 +9,7 @@ We present ["spCellEval"](https://huggingface.co/spaces/Arozhada/spcelleval), a 
 
 ## Getting Started
 
-In order to reproduce the results, the raw datasets currently need to be downloaded from public repositories. Please refer to the public registered Stage 1 manuscript on [figshare]()
+In order to reproduce the results, the raw datasets currently need to be downloaded from public repositories. Please refer to the public registered Stage 1 manuscript. [IMMUCan](https://zenodo.org/records/12912567) is one example dataset. 
 
 
 
@@ -47,6 +47,8 @@ Scripts to run each method are provided in `src/<method>`.
 
 Datasets and parameter settings can be found in manuscript supplement.
 
+For installation, and method specific details like runtime, please refer to each method's documentation. 
+
 ### Evaluation Scripts
 The notebooks in  `src/metrics_scripts`. `...` needs to be run first to get ... and `...` processes all metrics. 
 
@@ -60,10 +62,14 @@ To officially add your own method, please open an issue and provide us with the 
 Folder Structure to add your predictions in 
 ```
 results/
-├── Method1/
-│   └── predictions_*.csv
-├── Method2/
-└── Method3/
+├── Dataset1/
+│   ├── method1/
+│   │    ├──predictions_*.csv
+│   │    └──fold_times.txt
+│   ├── method2/
+│   ...
+├── Dataset2/
+└── Dataset3/
 ```
 
 
