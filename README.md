@@ -37,17 +37,19 @@ pred_fold_{1-5}.csv   pred_fold_{1-5}.csv   pred_fold_{1-5}.csv
 
 ### Preprocessing
 
-Preprocessing of each dataset can be found in `src/preprocessing/datasets/<process_dataset.ipynb>`
+Preprocessing of each dataset can be found in `src/preprocessing/datasets/<process_dataset.ipynb>` Paths need to be adjusted.
 
 For some datasets, multistack tiffs or channel_names have to be created. Please refer to `src/preprocessing/`
 
 ### Running methods
 
-Scripts to run each method are provided in `src/<method>`.
+Scripts to run each method are provided in `src/<method>`. For supervised method, create kfolds first using the `run_kfold_creator.py` file.
 
 Datasets and parameter settings can be found in manuscript supplement.
 
-For installation, and method specific details like runtime, please refer to each method's documentation. 
+For installation, and method specific details like runtime, please refer to each method's documentation.
+
+The expected output from each method is a `predictions_*.csv` file for each fold chosen and a `fold_time.txt` recording running times if chosen.
 
 ### Evaluation Scripts
 The notebooks in  `src/metrics_scripts`. `...` needs to be run first to get ... and `...` processes all metrics. 
