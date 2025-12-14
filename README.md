@@ -52,8 +52,7 @@ For installation, and method specific details like runtime, please refer to each
 The expected output from each method is a `predictions_*.csv` file for each fold chosen and a `fold_time.txt` recording running times if chosen.
 
 ### Evaluation Scripts
-The notebooks in  `src/metrics_scripts`. `...` needs to be run first to get ... and `...` processes all metrics. 
-
+The notebooks in  `src/metrics_scripts` perform the evaluation over all methods. The code blocks withiin `eval_mapping.ipynb` goes through all the methods within a specified dataset and outputs a `final_results.csv` file that contains all of the metrics for different levels. 
 
 ## Adding your own method
 To officially add your own method, please open an issue and provide us with the following to reproduce your method. 
