@@ -125,7 +125,7 @@ def run_scyan(
             disp = ConfusionMatrixDisplay(
                 confusion_matrix=cm, display_labels=class_labels
             )
-            fig, ax = plt.subplots(figsize=(12, 12))
+            fig, ax = plt.subplots(figsize=(15, 15))
             disp.plot(cmap="Blues", xticks_rotation="vertical", ax=ax)
             plt.tight_layout()
             plt.savefig(os.path.join(output_path, f"confusion_matrix_{n}.png"))

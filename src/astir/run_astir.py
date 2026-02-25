@@ -24,10 +24,10 @@ def run_astir(
     output_path
 ):
     df = pd.read_csv(quant_path)
+    marker_cols = df.loc[:, :separate_col].columns
     if scaling is not None:
         if separate_col is None:
             raise ValueError("`separate_col` must be specified when `scaling` is used.")
-        marker_cols = df.loc[:, :separate_col].columns
         df[marker_cols] = df[marker_cols] * scaling
     if log1p:
         df[marker_cols] = np.log1p(df[marker_cols])
