@@ -2,6 +2,7 @@ import deepcell_types
 import pandas as pd
 import numpy as np
 import os
+from pathlib import Path
 import tifffile as tiff
 import time
 import argparse
@@ -14,13 +15,20 @@ def set_seed(seed: int):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed) 
+    torch.cuda.manual_seed_all(seed)
+
+def stem_all(name):
+    p = Path(name)
+    while p.suffix:
+        p = p.with_suffix('')
+    return p.name
 
 def run_deepcelltypes(
     image_seg_pairs,
     marker_path,
     quant_path,
     rename_rules,
+    strip_extensions,
     mpp,
     model_name,
     output_dir,
@@ -46,6 +54,9 @@ def run_deepcelltypes(
             rename_dict = json.load(f)
             master_quant["sample_id"] = master_quant["sample_id"].replace(rename_dict)
 
+    if strip_extensions:
+        master_quant["sample_id"] = master_quant["sample_id"].apply(stem_all)
+
     reformatting_logged = False
     inference_times = []
 
@@ -58,8 +69,11 @@ def run_deepcelltypes(
         for image, segmask in image_seg_pairs:
             img = tiff.imread(image)
             seg = tiff.imread(segmask)
-            filename_with_ext = os.path.basename(image)
-            img_name, _ = os.path.splitext(filename_with_ext)
+            if strip_extensions:
+                img_name = stem_all(os.path.basename(image))
+            else:
+                filename_with_ext = os.path.basename(image)
+                img_name, _ = os.path.splitext(filename_with_ext)
 
             # Check for shape and otherwise reformat
             if img.ndim != 3:
@@ -130,7 +144,6 @@ def run_deepcelltypes(
                 "SmoothMuscle": "muscle",
                 "Nerve": "Neuronal",
                 "Erythrocyte": "Blood",
-                "EVT": "Trophoblast",
             }
         )
         final_quant_table.to_csv(
@@ -152,7 +165,7 @@ def main():
         "--input_dirs",
         nargs=2,
         metavar=("IMAGE_DIR", "SEG_DIR"),
-        help="Paths to the directories for input images and segmentation masks Should be executed from command line like this: --input_dirs /path/to/images /path/to/segmentations",
+        help="Paths to the directories for input images and segmentation masks Should be executed from command line like this: --input_dirs /path/to/images /path/to/segmentations, only works if image and segmentation files have the same names",
     )
     group.add_argument(
         "--data_paths",
@@ -173,6 +186,12 @@ def main():
         type=str,
         default=None,
         help='Optional: Path to a JSON file with a dictionary to rename instances in the sample_id column of the quantification table. The keys should be the old names and the values the new names.',
+    )
+    parser.add_argument(
+        '--strip_extensions',
+        action='store_true',
+        default=False,
+        help='If set, strip all file extensions from sample_id in the quant table and from image basenames before merging. Handles cases like .ome.tif or sample_id stored as filename.csv.',
     )
     parser.add_argument(
         "--mpp",
@@ -246,6 +265,7 @@ def main():
         marker_path=args.marker_path,
         quant_path=args.quant_path,
         rename_rules=args.rename_rules,
+        strip_extensions=args.strip_extensions,
         mpp=args.mpp,
         model_name=args.model_name,
         output_dir=args.output_dir,
