@@ -2,6 +2,7 @@ import deepcell_types
 import pandas as pd
 import numpy as np
 import os
+import gc
 from pathlib import Path
 import tifffile as tiff
 import time
@@ -60,35 +61,39 @@ def run_deepcelltypes(
     reformatting_logged = False
     inference_times = []
 
+    # Load images once outside the n_runs loop to avoid redundant reloading
+    loaded_images = []
+    for image, segmask in image_seg_pairs:
+        img = tiff.imread(image)
+        seg = tiff.imread(segmask)
+        if strip_extensions:
+            img_name = stem_all(os.path.basename(image))
+        else:
+            filename_with_ext = os.path.basename(image)
+            img_name, _ = os.path.splitext(filename_with_ext)
+
+        if img.ndim != 3:
+            raise ValueError(
+                f"Image {image} is not a 3D image. Expected shape (c, h, w), got {img.shape}."
+            )
+        dim1, dim2, dim3 = img.shape
+        if dim3 < dim1 and dim3 < dim2:
+            img = img.transpose(2, 0, 1)
+            if not reformatting_logged:
+                print(
+                    f"Reformatted image {image} from shape {img.shape} to (c, h, w)."
+                )
+                reformatting_logged = True
+
+        loaded_images.append((img, seg, img_name))
+
     for n in range(n_runs):
-        set_seed(seed + n)  
+        set_seed(seed + n)
         quant = master_quant.copy()
         start = time.time()
         prediction_results_list = []
 
-        for image, segmask in image_seg_pairs:
-            img = tiff.imread(image)
-            seg = tiff.imread(segmask)
-            if strip_extensions:
-                img_name = stem_all(os.path.basename(image))
-            else:
-                filename_with_ext = os.path.basename(image)
-                img_name, _ = os.path.splitext(filename_with_ext)
-
-            # Check for shape and otherwise reformat
-            if img.ndim != 3:
-                raise ValueError(
-                    f"Image {image} is not a 3D image. Expected shape (c, h, w), got {img.shape}."
-                )
-            dim1, dim2, dim3 = img.shape
-            if dim3 < dim1 and dim3 < dim2:
-                img = img.transpose(2, 0, 1)
-                if not reformatting_logged:
-                    print(
-                        f"Reformatted image {image} from shape {img.shape} to (c, h, w)."
-                    )
-                    reformatting_logged = True
-
+        for img, seg, img_name in loaded_images:
             cell_types = deepcell_types.predict(
                 img,
                 seg,
@@ -106,6 +111,9 @@ def run_deepcelltypes(
             cell_types_df.reset_index(inplace=True)
             cell_types_df.rename(columns={"index": "cell_index"}, inplace=True)
             prediction_results_list.append(cell_types_df)
+            del cell_types
+            torch.cuda.empty_cache()
+            gc.collect()
 
         end = time.time()
         elapsed_time = end - start
