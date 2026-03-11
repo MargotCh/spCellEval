@@ -68,7 +68,10 @@ def run_deepcelltypes(
         reformatting_logged = False
 
         for image, segmask in image_seg_pairs:
-            img = tiff.memmap(image)
+            try:
+                img = tiff.memmap(image)
+            except ValueError:
+                img = tiff.imread(image)
             seg = tiff.imread(segmask)
             if strip_extensions:
                 img_name = stem_all(os.path.basename(image))
