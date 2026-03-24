@@ -57,9 +57,9 @@ def main():
     )
     parser.add_argument(
         "--sort",
-        type=bool,
+        action="store_true",
         default=False,
-        help="Boolean, Sort the files in the input directory before stacking them. Default: False"
+        help="Sort the files in the input directory before stacking them. Default: False"
     )
     args = parser.parse_args()
     create_multistack_tiff(args.input_path, args.output_path, args.output_name, args.sort)
