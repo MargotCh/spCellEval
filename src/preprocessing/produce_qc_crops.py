@@ -28,7 +28,7 @@ def _get_grid_centers(image_height, image_width, size_y, size_x):
             centers.append((cy, cx))
     return centers
 
-def _write_single_crop(i, cy, cx, arr, axes, mask_arr, mask_axes, size_y, size_x, channel_names, output_dir):
+def _write_single_crop(i, cy, cx, arr, axes, mask_arr, mask_axes, size_y, size_x, channel_names, output_dir, image_name):
     y0 = cy - size_y // 2
     y1 = cy + size_y // 2
     x0 = cx - size_x // 2
@@ -40,7 +40,7 @@ def _write_single_crop(i, cy, cx, arr, axes, mask_arr, mask_axes, size_y, size_x
     slices[axes.index('X')] = slice(x0, x1)
     crop = arr[tuple(slices)].compute()
     tifffile.imwrite(
-        os.path.join(output_dir, f"crop_{i:04d}.ome.tiff"),
+        os.path.join(output_dir, f"crop_{image_name}_{i:04d}.ome.tiff"),
         crop,
         metadata={"Channel": {"Name": channel_names}},
         photometric="minisblack",
@@ -53,7 +53,7 @@ def _write_single_crop(i, cy, cx, arr, axes, mask_arr, mask_axes, size_y, size_x
     mask_slices[mask_axes.index('X')] = slice(x0, x1)
     mask_crop = mask_arr[tuple(mask_slices)].compute()
     tifffile.imwrite(
-        os.path.join(output_dir, f"crop_{i:04d}_mask.tiff"),
+        os.path.join(output_dir, f"crop_{image_name}_{i:04d}_mask.tiff"),
         mask_crop,
         photometric="minisblack",
         compression="zlib",
@@ -81,9 +81,10 @@ def crop_images(tiff_path, mask_path, markers_path, crop_size, n_crops, output_d
 
     selected = random.sample(centers, n_crops)
     n_workers = min(n_workers, n_crops)
+    image_name = os.path.basename(tiff_path).replace(".ome.tiff", "").replace(".tiff", "")
     os.makedirs(output_dir, exist_ok=True)
     args_list = [
-        (i, cy, cx, arr, axes, mask_arr, mask_axes, size_y, size_x, channel_names, output_dir) for i, (cy, cx) in enumerate(selected)
+        (i, cy, cx, arr, axes, mask_arr, mask_axes, size_y, size_x, channel_names, output_dir, image_name) for i, (cy, cx) in enumerate(selected)
         ]
     with ThreadPool(processes=n_workers) as pool:
         pool.starmap(_write_single_crop, args_list)
