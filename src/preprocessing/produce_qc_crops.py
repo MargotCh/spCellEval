@@ -1,10 +1,9 @@
 import argparse
-import numpy as np
 import tifffile
-import zarr
 import dask.array as da
 import os
 import random
+from multiprocessing.pool import ThreadPool
 
 
 def _lazy_load(path):
@@ -29,8 +28,39 @@ def _get_grid_centers(image_height, image_width, size_y, size_x):
             centers.append((cy, cx))
     return centers
 
+def _write_single_crop(i, cy, cx, arr, axes, mask_arr, mask_axes, size_y, size_x, channel_names, output_dir):
+    y0 = cy - size_y // 2
+    y1 = cy + size_y // 2
+    x0 = cx - size_x // 2
+    x1 = cx + size_x // 2
 
-def crop_images(tiff_path, mask_path, markers_path, crop_size, n_crops, output_dir):
+    # crop image
+    slices = [slice(None)] * len(axes)
+    slices[axes.index('Y')] = slice(y0, y1)
+    slices[axes.index('X')] = slice(x0, x1)
+    crop = arr[tuple(slices)].compute()
+    tifffile.imwrite(
+        os.path.join(output_dir, f"crop_{i:04d}.ome.tiff"),
+        crop,
+        metadata={"Channel": {"Name": channel_names}},
+        photometric="minisblack",
+        compression="zlib",
+    )
+
+    # crop mask
+    mask_slices = [slice(None)] * len(mask_axes)
+    mask_slices[mask_axes.index('Y')] = slice(y0, y1)
+    mask_slices[mask_axes.index('X')] = slice(x0, x1)
+    mask_crop = mask_arr[tuple(mask_slices)].compute()
+    tifffile.imwrite(
+        os.path.join(output_dir, f"crop_{i:04d}_mask.tiff"),
+        mask_crop,
+        photometric="minisblack",
+        compression="zlib",
+    )
+
+
+def crop_images(tiff_path, mask_path, markers_path, crop_size, n_crops, output_dir, n_workers):
     size_y, size_x = crop_size
     channel_names = _load_channels(markers_path)
 
@@ -50,39 +80,13 @@ def crop_images(tiff_path, mask_path, markers_path, crop_size, n_crops, output_d
         n_crops = max_crops
 
     selected = random.sample(centers, n_crops)
-
+    n_workers = min(n_workers, n_crops)
     os.makedirs(output_dir, exist_ok=True)
-
-    for i, (cy, cx) in enumerate(selected):
-        y0 = cy - size_y // 2
-        y1 = cy + size_y // 2
-        x0 = cx - size_x // 2
-        x1 = cx + size_x // 2
-
-        # crop image
-        slices = [slice(None)] * len(axes)
-        slices[axes.index('Y')] = slice(y0, y1)
-        slices[axes.index('X')] = slice(x0, x1)
-        crop = arr[tuple(slices)].compute()
-        tifffile.imwrite(
-            os.path.join(output_dir, f"crop_{i:04d}.ome.tiff"),
-            crop,
-            metadata={"Channel": {"Name": channel_names}},
-            photometric="minisblack",
-            compression="zlib",
-        )
-
-        # crop mask
-        mask_slices = [slice(None)] * len(mask_axes)
-        mask_slices[mask_axes.index('Y')] = slice(y0, y1)
-        mask_slices[mask_axes.index('X')] = slice(x0, x1)
-        mask_crop = mask_arr[tuple(mask_slices)].compute()
-        tifffile.imwrite(
-            os.path.join(output_dir, f"crop_{i:04d}_mask.tiff"),
-            mask_crop,
-            photometric="minisblack",
-            compression="zlib",
-        )
+    args_list = [
+        (i, cy, cx, arr, axes, mask_arr, mask_axes, size_y, size_x, channel_names, output_dir) for i, (cy, cx) in enumerate(selected)
+        ]
+    with ThreadPool(processes=n_workers) as pool:
+        pool.starmap(_write_single_crop, args_list)
 
     tif.close()
     mask_tif.close()
@@ -97,6 +101,7 @@ def main():
     parser.add_argument("--markers_path", required=True, help="Path to the markers.txt file.")
     parser.add_argument("--crop_size", nargs=2, type=int, default=[256, 256], metavar=("H", "W"), help="Crop size as height width (default: 256 256).")
     parser.add_argument("--n_crops", type=int, required=True, help="Number of crops to produce.")
+    parser.add_argument("--n_workers", type=int, default=4, help="Number of worker threads for parallel processing (default: 4).")
     parser.add_argument("--output_dir", required=True, help="Directory to save crops.")
     args = parser.parse_args()
 
@@ -107,6 +112,7 @@ def main():
         crop_size=tuple(args.crop_size),
         n_crops=args.n_crops,
         output_dir=args.output_dir,
+        n_workers=args.n_workers
     )
 
 
