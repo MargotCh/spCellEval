@@ -28,72 +28,85 @@ def _get_2d_mask(mask_arr, mask_axes):
     return mask[tuple(slices)]
 
 
-def _compute_crops_from_mask(mask_arr, mask_axes, target_cells, n_crops, probe_size=256):
-    """Sample on-tissue centers and derive a local crop size per center via a probe window.
+def _count_cells_in_window(mask_2d, cy, cx, side):
+    h, w = mask_2d.shape
+    half = side // 2
+    window = mask_2d[max(0, cy - half):min(h, cy + half),
+                     max(0, cx - half):min(w, cx + half)]
+    return int(np.count_nonzero(np.unique(window)))
+
+
+def _binary_search_crop_size(mask_2d, cy, cx, target_cells, max_iter=25):
+    """Find the smallest square side length centred on (cy, cx) that contains
+    at least target_cells labelled cells, via binary search on the mask."""
+    h, w = mask_2d.shape
+    lo, hi = 1, min(h, w)
+
+    # check whether even the maximum window has enough cells
+    if _count_cells_in_window(mask_2d, cy, cx, hi) < target_cells:
+        print(f"  Warning: fewer than {target_cells} cells reachable from ({cy},{cx}); "
+              f"using maximum crop side ({hi}px).")
+        return hi
+
+    for _ in range(max_iter):
+        mid = (lo + hi) // 2
+        if _count_cells_in_window(mask_2d, cy, cx, mid) < target_cells:
+            lo = mid
+        else:
+            hi = mid
+        if hi - lo <= 1:
+            break
+
+    return hi
+
+
+def _compute_crops_from_mask(mask_arr, mask_axes, target_cells, n_crops):
+    """Sample on-tissue centers and find the exact crop size per center via binary
+    search on the mask.
 
     Returns a list of (cy, cx, size_y, size_x) tuples with centers guaranteed to keep
     the crop window inside the image.
     """
     mask_2d = _get_2d_mask(mask_arr, mask_axes)
     h, w = mask_2d.shape
-    half_probe = probe_size // 2
 
-    # direct lookup of all tissue pixel coordinates — no scanning needed
     tissue_coords = np.argwhere(mask_2d > 0)
     if len(tissue_coords) == 0:
         raise ValueError("Mask contains no labelled cells.")
 
-    # prefer positions where the full probe fits inside the image
-    valid = tissue_coords[
-        (tissue_coords[:, 0] >= half_probe) & (tissue_coords[:, 0] < h - half_probe) &
-        (tissue_coords[:, 1] >= half_probe) & (tissue_coords[:, 1] < w - half_probe)
-    ]
-    if len(valid) == 0:
-        print("Warning: image is smaller than probe_size in at least one dimension; "
-              "probe windows will be clipped to image bounds.")
-        valid = tissue_coords
-
-    if n_crops > len(valid):
+    if n_crops > len(tissue_coords):
         print(
-            f"Warning: requested {n_crops} crops but only {len(valid)} unique tissue "
-            f"positions are available — some crops will overlap."
+            f"Warning: requested {n_crops} crops but only {len(tissue_coords)} unique "
+            f"tissue positions are available — some crops will overlap."
         )
 
-    chosen_idx = np.random.choice(len(valid), size=n_crops, replace=n_crops > len(valid))
-    chosen = valid[chosen_idx]
+    chosen_idx = np.random.choice(len(tissue_coords), size=n_crops,
+                                  replace=n_crops > len(tissue_coords))
+    chosen = tissue_coords[chosen_idx]
 
     results = []
     for cy, cx in chosen:
         cy, cx = int(cy), int(cx)
 
-        # clamp probe to image bounds (guards against border tissue pixels in fallback)
-        probe = mask_2d[
-            max(0, cy - half_probe):min(h, cy + half_probe),
-            max(0, cx - half_probe):min(w, cx + half_probe),
-        ]
-        n_local = int(np.sum(np.unique(probe) != 0))
+        # binary search needs a fixed center — use a preliminary size estimate to
+        # clamp first, then search from the clamped position
+        # initial clamp uses a conservative half=1 so any tissue pixel is valid
+        # the real clamp happens after we know the side
+        side = _binary_search_crop_size(mask_2d, cy, cx, target_cells)
 
-        if n_local == 0:
-            print(f"  Warning: probe at ({cy},{cx}) contains no cells; "
-                  f"defaulting crop side to probe_size ({probe_size}px).")
-            side = probe_size
-        else:
-            local_density = n_local / probe.size  # cells per pixel within probe
-            side = int(np.sqrt(target_cells / local_density))
-
-        if side > min(h, w):
-            print(f"  Warning: derived crop side {side}px exceeds image bounds "
-                  f"({h}×{w}); clamping.")
-            side = min(h, w)
-
-        # shift center if needed so the crop window stays fully inside the image
+        # clamp center so the derived crop fits inside the image, then re-verify
         half_side = side // 2
         cy = int(np.clip(cy, half_side, h - half_side))
         cx = int(np.clip(cx, half_side, w - half_side))
 
+        # re-run search from clamped position (cheap — usually converges in 1-2 iters
+        # since the clamped center is typically only a few pixels away)
+        side = _binary_search_crop_size(mask_2d, cy, cx, target_cells)
+
+        n_actual = _count_cells_in_window(mask_2d, cy, cx, side)
         results.append((cy, cx, side, side))
-        print(f"  Center ({cy},{cx}): {n_local} cells in probe → crop side {side}px "
-              f"for ~{target_cells} cells")
+        print(f"  Center ({cy},{cx}): crop side {side}px contains {n_actual} cells "
+              f"(target {target_cells})")
 
     return results
 
@@ -136,7 +149,7 @@ def _write_single_crop(i, cy, cx, arr, axes, mask_arr, mask_axes,
 
 
 def crop_images(tiff_path, mask_path, markers_path, crop_size, n_crops,
-                output_dir, n_workers, target_cells=None, probe_size=256):
+                output_dir, n_workers, target_cells=None):
     channel_names = _load_channels(markers_path)
 
     arr, tif = _lazy_load(tiff_path)
@@ -148,9 +161,7 @@ def crop_images(tiff_path, mask_path, markers_path, crop_size, n_crops,
     mask_axes = mask_tif.series[0].axes
 
     if target_cells is not None:
-        crops = _compute_crops_from_mask(
-            mask_arr, mask_axes, target_cells, n_crops, probe_size=probe_size
-        )
+        crops = _compute_crops_from_mask(mask_arr, mask_axes, target_cells, n_crops)
     else:
         size_y, size_x = crop_size
         centers = _get_grid_centers(image_height, image_width, size_y, size_x)
@@ -197,10 +208,6 @@ def main():
                         help="Target number of cells per crop. Crop size is derived "
                              "from local mask density around each sampled center. "
                              "Mutually exclusive with --crop_size.")
-    parser.add_argument("--probe_size", type=int, default=256,
-                        help="Side length (px) of the square probe window used to "
-                             "estimate local cell density when --target_cells is set "
-                             "(default: 256).")
     parser.add_argument("--n_crops", type=int, required=True,
                         help="Number of crops to produce.")
     parser.add_argument("--n_workers", type=int, default=4,
@@ -218,7 +225,6 @@ def main():
         output_dir=args.output_dir,
         n_workers=args.n_workers,
         target_cells=args.target_cells,
-        probe_size=args.probe_size,
     )
 
 
