@@ -177,7 +177,10 @@ def crop_images(tiff_path, mask_path, markers_path, crop_size, n_crops,
         crops = [(cy, cx, size_y, size_x) for cy, cx in random.sample(centers, n_crops)]
 
     n_crops = len(crops)
-    image_name = os.path.basename(tiff_path).replace(".ome.tiff", "").replace(".tiff", "")
+    stem = os.path.basename(tiff_path)
+    while os.path.splitext(stem)[1]:
+        stem = os.path.splitext(stem)[0]
+    image_name = stem
     os.makedirs(output_dir, exist_ok=True)
 
     args_list = [
