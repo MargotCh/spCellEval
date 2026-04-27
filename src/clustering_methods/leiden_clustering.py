@@ -18,6 +18,7 @@ parser.add_argument('-m', '--markers', dest='markers', nargs='+', help='List of 
 parser.add_argument('-p', '--PCA', dest='PCA', action='store_true', help='Perform PCA (default: False)')
 parser.add_argument('-a', '--arcsine', dest='arcsine', action='store_true', help='Perform arcsine transformation (default: False)')
 parser.add_argument('-n', '--normalization', dest='normalization', action='store_true', help='Perform normalization (default: False)')
+parser.add_argument('-ha', '--harmony', dest='harmony', action='store_true', help='Perform Harmony integration (default: False)')
 parser.add_argument('-l', '--log', dest='log', required= False, default='off', choices=['short', 'long', 'off'], help='Logging level: short, long, or off (default: long)')
 parser.add_argument('-it', '--iterations', dest='iterations', type=int, required= False, default=5, help='Number of iterations to run (default: 5)')
 parser.add_argument('-r', '--resolutions', dest='resolutions', nargs='+', type=float, required= False, default=[0.5, 0.8, 1.0, 2.0], help='List of resolutions for Leiden clustering (default: [0.5, 0.8, 1.0, 2.0])')
@@ -47,7 +48,7 @@ def logging_setup(output_path):
     )
 
 # Define preprocessing function
-def preprocessing(input, markers, PCA, normalization, arcsine):
+def preprocessing(input, markers, PCA, normalization, arcsine, harmony):
     # Read in data
     df = pd.read_csv(input)
     features_list = markers
@@ -63,8 +64,12 @@ def preprocessing(input, markers, PCA, normalization, arcsine):
         sc.pp.normalize_total(adata, target_sum=1)
 
     if PCA == True:
-        sc.pp.pca(adata)
+        sc.pp.pca(adata, n_comps=30)
         sc.pp.neighbors(adata, n_neighbors=10, use_rep='X_pca')
+    elif harmony == True:
+        sc.pp.pca(adata, n_comps=30)
+        sc.external.pp.harmony_integrate(adata, 'sample_id', basis='X_pca', adjusted_basis='X_harmony')
+        sc.pp.neighbors(adata, n_neighbors=10, use_rep='X_harmony')
     else:
         sc.pp.neighbors(adata, n_neighbors=10)
     return adata, df
@@ -105,7 +110,7 @@ def leiden_with_greedy(adata, df, iterations, output_path, log, resolutions):
 def main():
     if args.log != 'off':
         logging_setup(args.output_path)
-    adata, df = preprocessing(args.input, args.markers, args.PCA, args.normalization, args.arcsine)
+    adata, df = preprocessing(args.input, args.markers, args.PCA, args.normalization, args.arcsine, args.harmony)
     leiden_with_greedy(adata, df, args.iterations, args.output_path, args.log, args.resolutions)
 
 
