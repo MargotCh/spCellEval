@@ -21,6 +21,7 @@ parser.add_argument("--remove_str", dest = "remove_str", required = False, defau
 parser.add_argument('-p', '--PCA', dest='PCA', action='store_true', help='Perform PCA (default: False)')
 parser.add_argument('-a', '--arcsine', dest='arcsine', action='store_true', help='Perform arcsine transformation (default: False)')
 parser.add_argument('-n', '--normalization', dest='normalization', action='store_true', help='Perform normalization (default: False)')
+parser.add_argument('-ha', '--harmony', dest='harmony', action='store_true', help='Perform Harmony integration (default: False)')
 parser.add_argument('-l', '--log', dest='log', required= False, default='off', choices=['short', 'long', 'off'], help='Logging level: short, long, or off (default: long)')
 parser.add_argument('-it', '--iterations', dest='iterations', type=int, required= False, default=5, help='Number of iterations to run (default: 5)')
 parser.add_argument('-r', '--resolutions', dest='resolutions', nargs='+', type=float, required= False, default=[0.5, 0.8, 1.0, 2.0], help='List of resolutions for Leiden clustering (default: [0.5, 0.8, 1.0, 2.0])')
@@ -62,7 +63,7 @@ def join_ground_truth_with_nimbus(ground_truth,input, remove_str, iteration):
     nimbus_df = pd.read_csv(nimbus_path)
     # Convert fov column to string type
     nimbus_df['fov'] = nimbus_df['fov'].astype(str)
-
+    
     # Reduce nimbus data to only contain cells also present in gt, based on labels and fov
     nimbus_df = pd.merge(
         nimbus_df,
@@ -85,10 +86,8 @@ def join_ground_truth_with_nimbus(ground_truth,input, remove_str, iteration):
     return nimbus_df
 
 # Define preprocessing function
-def preprocessing(nimbus_df, markers, PCA, normalization, arcsine):
+def preprocessing(nimbus_df, markers, PCA, normalization, arcsine, harmony):
     # Subset DataFrame into features and observations
-    print(nimbus_df.columns)
-    print(nimbus_df.head())
     features_list = markers
     X = nimbus_df[features_list]
     obs = nimbus_df.drop(columns=features_list)
@@ -101,8 +100,12 @@ def preprocessing(nimbus_df, markers, PCA, normalization, arcsine):
         sc.pp.normalize_total(adata, target_sum=1)
 
     if PCA == True:
-        sc.pp.pca(adata)
+        sc.pp.pca(adata, n_comps=30)
         sc.pp.neighbors(adata, n_neighbors=10, use_rep='X_pca')
+    elif harmony == True:
+        sc.pp.pca(adata, n_comps=30)
+        sc.external.pp.harmony_integrate(adata, 'sample_id', basis='X_pca', adjusted_basis='X_harmony')
+        sc.pp.neighbors(adata, n_neighbors=10, use_rep='X_harmony')
     else:
         sc.pp.neighbors(adata, n_neighbors=10)
     return adata
@@ -145,7 +148,7 @@ def main():
     for iteration in range(1, args.iterations + 1):
         # Join ground truth with nimbus output
         nimbus_df = join_ground_truth_with_nimbus(args.ground_truth, args.input, args.remove_str, iteration)
-        adata = preprocessing(nimbus_df, args.markers, args.PCA, args.normalization, args.arcsine)
+        adata = preprocessing(nimbus_df, args.markers, args.PCA, args.normalization, args.arcsine, args.harmony)
         leiden_with_greedy(adata, nimbus_df, iteration, args.output_path, args.log, args.resolutions)
 
 
